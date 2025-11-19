@@ -19,40 +19,40 @@ COUNTRIES = [
 
 
 def get_data_from_api(params):
-
     url = 'https://ws.audioscrobbler.com/2.0/'
     headers = {'user-agent': 'username'}
     payload = {
         'api_key': Variable.get("api_key"),
         'format': 'json'
     }
-    payload.update(params)
+    payload.update(params) 
     response = requests.get(url, headers=headers, params=payload)
     return response.json()
 
 
 def load_data_to_s3(**context):
-    
     date = context["data_interval_end"].format("YYYY-MM-DD")
     s3_hook = S3Hook(aws_conn_id='aws_conn')
-
+    
     for country in COUNTRIES:
-        logging.info(f"Попытка получения данных для {country} за {date}")   
+        logging.info(f">> Отправка запроса в API для {country} за {date}...")   
         params = {
             'method': 'geo.getTopTracks',
             'country': country,
             'limit': 100
         }
         data = get_data_from_api(params)
+        logging.info(f">> Получены данные для {country} за {date}.")   
         
         key = f"top_100/raw/{date}/{country}_{date}.json"
+        logging.info(f">> Загрузка данных в S3 для {country} за {date}...")   
         s3_hook.load_string(
             string_data=json.dumps(data, indent=4),
             key=key,
             bucket_name='bucket',
             replace=True
         )
-        logging.info(f"Данные для {country} за {date} загружены в S3") 
+        logging.info(f">> Загружены данные в S3 для {country} за {date}.") 
 
 
 default_args = {
