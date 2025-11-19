@@ -35,8 +35,8 @@ with DAG(
         external_dag_id="from_ods_to_dds_pg",
         allowed_states=["success"],
         mode="reschedule",
-        timeout=360000,  # длительность работы сенсора
-        poke_interval=60  # частота проверки
+        timeout=360000,
+        poke_interval=60 
     )
 
     insert_into_avg_song_duration_by_country = SQLExecuteQueryOperator(
@@ -44,12 +44,12 @@ with DAG(
         conn_id="pg_conn",
         sql = '''
             INSERT INTO dm.avg_song_duration_by_country
-            SELECT date, country_name, AVG(duration_sec)
-            FROM dds.fact_daily_top_100
-                JOIN dds.dim_song USING(song_id)
-                JOIN dds.dim_country USING(country_id)
-            WHERE date = %(date)s    
-            GROUP BY date, country_name
+                SELECT date, country_name, AVG(duration_sec)
+                FROM dds.fact_daily_top_100
+                    JOIN dds.dim_song USING(song_id)
+                    JOIN dds.dim_country USING(country_id)
+                WHERE date = %(date)s    
+                GROUP BY date, country_name
         ''',
         parameters={"date": DATE}
     )
@@ -59,12 +59,27 @@ with DAG(
         conn_id="pg_conn",
         sql = '''
             INSERT INTO dm.artist_appearances_by_date
-            SELECT date, country_name, artist_name, COUNT(*)
-            FROM dds.fact_daily_top_100
-                JOIN dds.dim_artist USING(artist_id)
-                JOIN dds.dim_country USING(country_id)
-            WHERE date = %(date)s   
-            GROUP BY date, country_name, artist_name
+                SELECT date, country_name, artist_name, COUNT(*)
+                FROM dds.fact_daily_top_100
+                    JOIN dds.dim_artist USING(artist_id)
+                    JOIN dds.dim_country USING(country_id)
+                WHERE date = %(date)s   
+                GROUP BY date, country_name, artist_name
+        ''',
+        parameters={"date": DATE}
+    )
+
+    insert_into_expected_artist_royalties_by_date = SQLExecuteQueryOperator(
+        task_id="insert_into_expected_artist_royalties_by_date",
+        conn_id="pg_conn",
+        sql = '''
+            INSERT INTO dm.expected_artist_royalties_by_date
+                SELECT date, artist_name, ROUND(SUM(listeners_count) * 0.003, 2) AS royalties 
+                FROM dds.fact_daily_top_100 fdt
+                    JOIN dds.dim_artist da USING(artist_id)
+                WHERE date = %(date)s
+                GROUP BY date, artist_name	
+                ORDER BY date, royalties DESC
         ''',
         parameters={"date": DATE}
     )
@@ -73,4 +88,4 @@ with DAG(
         task_id="end"
     )    
 
-    start >> sensor_on_dds >> insert_into_avg_song_duration_by_country >> insert_into_artist_appearances_by_date >> end
+    start >> sensor_on_dds >> insert_into_avg_song_duration_by_country >> insert_into_artist_appearances_by_date >> insert_into_expected_artist_royalties_by_date >> end

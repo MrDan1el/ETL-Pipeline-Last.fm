@@ -35,8 +35,8 @@ with DAG(
         external_dag_id="transformed_from_s3_to_pg",
         allowed_states=["success"],
         mode="reschedule",
-        timeout=360000,  # длительность работы сенсора
-        poke_interval=60  # частота проверки
+        timeout=360000,
+        poke_interval=60
     )
 
     insert_into_dim_country = SQLExecuteQueryOperator(
@@ -70,7 +70,11 @@ with DAG(
         conn_id="pg_conn",
         sql = '''
             INSERT INTO dds.dim_song (song_name, duration_sec) 
-            SELECT DISTINCT song_name, duration_sec
+            SELECT DISTINCT song_name, 
+                   CASE 
+                   WHEN duration_sec = 0 THEN (SELECT AVG(duration_sec)::INT FROM ods.daily_data WHERE duration_sec > 0 AND source_date = %(date)s)
+                   ELSE duration_sec
+                   END
             FROM ods.daily_data
             WHERE source_date = %(date)s
             ON CONFLICT (song_name, duration_sec) DO NOTHING
@@ -90,9 +94,9 @@ with DAG(
                     dr.song_rank,
                     dr.listeners_count
             FROM ods.daily_data dr
-                JOIN dds.dim_artist da ON da.artist_name = dr.artist_name
-                JOIN dds.dim_song ds ON ds.song_name = dr.song_name AND ds.duration_sec = dr.duration_sec 
-                JOIN dds.dim_country dc ON dc.country_name = dr.country
+                LEFT JOIN dds.dim_artist da ON da.artist_name = dr.artist_name
+                LEFT JOIN dds.dim_song ds ON ds.song_name = dr.song_name AND ds.duration_sec = dr.duration_sec 
+                LEFT JOIN dds.dim_country dc ON dc.country_name = dr.country
             WHERE dr.source_date = %(date)s
             ON CONFLICT (date, country_id, song_rank) DO NOTHING
         ''',
