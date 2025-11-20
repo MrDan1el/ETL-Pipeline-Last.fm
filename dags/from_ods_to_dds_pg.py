@@ -94,9 +94,9 @@ with DAG(
                     dr.song_rank,
                     dr.listeners_count
             FROM ods.daily_data dr
-                LEFT JOIN dds.dim_artist da ON da.artist_name = dr.artist_name
-                LEFT JOIN dds.dim_song ds ON ds.song_name = dr.song_name AND ds.duration_sec = dr.duration_sec 
-                LEFT JOIN dds.dim_country dc ON dc.country_name = dr.country
+                JOIN dds.dim_artist da ON da.artist_name = dr.artist_name
+                JOIN dds.dim_song ds ON ds.song_name = dr.song_name AND ds.duration_sec = dr.duration_sec 
+                JOIN dds.dim_country dc ON dc.country_name = dr.country
             WHERE dr.source_date = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
             ON CONFLICT (date, country_id, song_rank) DO NOTHING
         '''
