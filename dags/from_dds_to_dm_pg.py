@@ -7,7 +7,7 @@ from airflow.operators.empty import EmptyOperator
 from airflow.sensors.external_task import ExternalTaskSensor
 
 
-DATE = datetime.now().strftime('%Y-%m-%d')
+# DATE = datetime.now().strftime('%Y-%m-%d')
 
 
 default_args = {
@@ -44,14 +44,13 @@ with DAG(
         conn_id="pg_conn",
         sql = '''
             INSERT INTO dm.avg_song_duration_by_country
-                SELECT date, country_name, AVG(duration_sec)
-                FROM dds.fact_daily_top_100
-                    JOIN dds.dim_song USING(song_id)
-                    JOIN dds.dim_country USING(country_id)
-                WHERE date = %(date)s    
-                GROUP BY date, country_name
-        ''',
-        parameters={"date": DATE}
+            SELECT date, country_name, AVG(duration_sec) AS avg_duration_sec
+            FROM dds.fact_daily_top_100 fdt
+                JOIN dds.dim_song dm USING(song_id)
+                JOIN dds.dim_country USING(country_id)
+            WHERE date = '{{ data_interval_end.strftime("%Y-%m-%d") }}'   
+            GROUP BY date, country_name
+        '''
     )
 
     insert_into_artist_appearances_by_date = SQLExecuteQueryOperator(
@@ -59,14 +58,12 @@ with DAG(
         conn_id="pg_conn",
         sql = '''
             INSERT INTO dm.artist_appearances_by_date
-                SELECT date, country_name, artist_name, COUNT(*)
-                FROM dds.fact_daily_top_100
-                    JOIN dds.dim_artist USING(artist_id)
-                    JOIN dds.dim_country USING(country_id)
-                WHERE date = %(date)s   
-                GROUP BY date, country_name, artist_name
-        ''',
-        parameters={"date": DATE}
+            SELECT date, artist_name, COUNT(*) AS cnt_appearance
+            FROM dds.fact_daily_top_100 fdt
+                JOIN dds.dim_artist da USING(artist_id)
+            WHERE date = '{{ data_interval_end.strftime("%Y-%m-%d") }}'   
+            GROUP BY date, artist_name
+        '''
     )
 
     insert_into_expected_artist_royalties_by_date = SQLExecuteQueryOperator(
@@ -74,14 +71,13 @@ with DAG(
         conn_id="pg_conn",
         sql = '''
             INSERT INTO dm.expected_artist_royalties_by_date
-                SELECT date, artist_name, ROUND(SUM(listeners_count) * 0.003, 2) AS royalties 
-                FROM dds.fact_daily_top_100 fdt
-                    JOIN dds.dim_artist da USING(artist_id)
-                WHERE date = %(date)s
-                GROUP BY date, artist_name	
-                ORDER BY date, royalties DESC
-        ''',
-        parameters={"date": DATE}
+            SELECT date, artist_name, ROUND(SUM(listeners_count) * 0.003, 2) AS royalties 
+            FROM dds.fact_daily_top_100 fdt
+                JOIN dds.dim_artist da USING(artist_id)
+            WHERE date = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
+            GROUP BY date, artist_name	
+            ORDER BY date, royalties DESC
+        '''
     )
 
     end = EmptyOperator(

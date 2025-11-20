@@ -7,7 +7,7 @@ from airflow.operators.empty import EmptyOperator
 from airflow.sensors.external_task import ExternalTaskSensor
 
 
-DATE = datetime.now().strftime('%Y-%m-%d')
+# DATE = datetime.now().strftime('%Y-%m-%d')
 
 
 default_args = {
@@ -46,10 +46,10 @@ with DAG(
             INSERT INTO dds.dim_country (country_name) 
             SELECT DISTINCT country 
             FROM ods.daily_data
-            WHERE source_date = %(date)s
+            WHERE source_date = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
             ON CONFLICT (country_name) DO NOTHING
-        ''',
-        parameters={"date": DATE}
+        '''
+        # parameters={"date": DATE}
     )
 
     insert_into_dim_artist = SQLExecuteQueryOperator(
@@ -59,10 +59,10 @@ with DAG(
             INSERT INTO dds.dim_artist (artist_name) 
             SELECT DISTINCT artist_name 
             FROM ods.daily_data
-            WHERE source_date = %(date)s
+            WHERE source_date = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
             ON CONFLICT (artist_name) DO NOTHING
-        ''',
-        parameters={"date": DATE}
+        '''
+        # parameters={"date": DATE}
     )
 
     insert_into_dim_song = SQLExecuteQueryOperator(
@@ -72,14 +72,14 @@ with DAG(
             INSERT INTO dds.dim_song (song_name, duration_sec) 
             SELECT DISTINCT song_name, 
                    CASE 
-                   WHEN duration_sec = 0 THEN (SELECT AVG(duration_sec)::INT FROM ods.daily_data WHERE duration_sec > 0 AND source_date = %(date)s)
+                   WHEN duration_sec = 0 THEN (SELECT AVG(duration_sec)::INT FROM ods.daily_data WHERE duration_sec > 0 AND source_date = '{{ data_interval_end.strftime("%Y-%m-%d") }}')
                    ELSE duration_sec
                    END
             FROM ods.daily_data
-            WHERE source_date = %(date)s
+            WHERE source_date = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
             ON CONFLICT (song_name, duration_sec) DO NOTHING
-        ''',
-        parameters={"date": DATE}
+        '''
+        # parameters={"date": DATE}
     )
 
     insert_into_fact_daily_top_100 = SQLExecuteQueryOperator(
@@ -97,10 +97,10 @@ with DAG(
                 LEFT JOIN dds.dim_artist da ON da.artist_name = dr.artist_name
                 LEFT JOIN dds.dim_song ds ON ds.song_name = dr.song_name AND ds.duration_sec = dr.duration_sec 
                 LEFT JOIN dds.dim_country dc ON dc.country_name = dr.country
-            WHERE dr.source_date = %(date)s
+            WHERE dr.source_date = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
             ON CONFLICT (date, country_id, song_rank) DO NOTHING
-        ''',
-        parameters={"date": DATE}
+        '''
+        # parameters={"date": DATE}
     )
 
     end = EmptyOperator(
